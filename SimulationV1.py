@@ -7,21 +7,29 @@ Original file is located at
     https://colab.research.google.com/github/felix-rojas/roomba-colab/blob/main/Reto_multiagentes.ipynb
 """
 
+#Se declaran las dependencias necesarias para correr este código
 dependencies = ["mesa", "numpy", "pandas"]
 
 import importlib
 import subprocess
 import sys
 
+#función para gestionar la importación e instalación de un paquete
 def install_and_import(needed_package):
     try:
+        #Intenta importar el módulo especificado por needed_package usando importlib.import_module
         importlib.import_module(needed_package)
+        #Imprime un mensaje si esto fue exitoso
         print(f"{needed_package} is already installed")
+    #Si el módulo no puede ser importado (porque no está instalado), se lanza una excepción.
     except ImportError:
         print(f"{needed_package} is not installed, installing now...")
+        #Usa subprocess.check_call para ejecutar un comando del sistema que instala el paquete.
         subprocess.check_call([sys.executable, "-m", "pip", "install", needed_package])
+        #Imprime un mensaje si esto fue exitoso
         print(f"{needed_package} has been installed")
 
+#Llama la función 'install_and_import' por cada una de las dependencias mencionadas
 for package in dependencies:
     install_and_import(package)
 
@@ -59,17 +67,32 @@ MAXVAL = 10000
 
 """##"""
 
-def generate_test_grid(width = 10, height = 10, wall_percentage=0.2, max_garbage_per_cell=8, min_empty_cells = 0.5):
+#Función que genera una cuadrícula de prueba con paredes, celdas vacías y basura.
+def generate_test_grid(width = 10, 
+                       height = 10, 
+                       wall_percentage=0.2, 
+                       max_garbage_per_cell=8, 
+                       min_empty_cells = 0.5):
+    #Crear un array unidimensional con valores aleatorios entre 0 y max_garbage_per_cell
     test_grid = np.random.choice(max_garbage_per_cell,width*height).astype("str")
+    #Cálculo del mínimo de celdas vacías necesarias a partir del porcentaje
     min_empty_cells = int(round(min_empty_cells * (width * height)))
+    #Cálculo de las paredes en el grid a partir del porcentaje
     wall_qty = int(round(wall_percentage * (width * height)))
+    #Asigna la letra "X" a las primeras posiciones del array para representar las paredes.
     for _ in range(wall_qty): test_grid[_] = "X"
+    #Asigna el valor "0" a las primeras posiciones del array para representar las celdas vacías.
     for _ in range(wall_qty, min_empty_cells): test_grid[_] = "0"
+    #Coloca la letra "P" en la primera posición del array para representar la posición inicial del agente.
     test_grid[0] = "P"
+    #Mezcla los elementos del array para distribuir las paredes, celdas vacías y basura de manera aleatoria.
     np.random.shuffle(test_grid)
+    #Reforma el array en una matriz bidimensional.
     test = test_grid.reshape(width,height)
+    #Retorna la matriz test y la posición (índices) del agente "P" dentro de la matriz.
     return test, np.argwhere(test=="P")[0]
 
+#Llamamos a la función generate_test_grid para crear la oficina.
 example_office, example_papelera = generate_test_grid()
 print(example_office)
 print(example_papelera)
@@ -89,18 +112,24 @@ print(example_papelera)
 DEBUG = True
 file_name = 'grid.txt'
 
+#Función para leer una cuadrícula desde un archivo de texto
 def leer_grid(nombre_archivo):
-  with open(nombre_archivo, 'r') as archivo:
-    lineas = archivo.readlines()
-    n, m = map(int, lineas[0].split())
-    oficina_ = []
-    papelera_pos_ = None
-    for i in range(1, n + 1):
-      fila = lineas[i].strip().split()
-      oficina_.append(fila)
-      if 'P' in fila:
-        papelera_pos_ = (i - 1, fila.index('P'))
-    return oficina_, papelera_pos_, n, m
+    #Abre el archivo especificado por nombre_archivo en modo lectura ('r').
+    with open(nombre_archivo, 'r') as archivo:
+      #Leer todas las líneas del archivo y las almacena en una lista llamada lineas.
+      lineas = archivo.readlines()
+      #Leer las coordenadas a partir de la primera línea.
+      n, m = map(int, lineas[0].split())
+      #Inicializar una lista vacía que almacenará las filas de la cuadrícula.
+      oficina_ = []
+      #Inicializa papelera_pos_ que se usará para almacenar la posición de la papelera.
+      papelera_pos_ = None
+      for i in range(1, n + 1):
+          fila = lineas[i].strip().split()
+          oficina_.append(fila)
+          if 'P' in fila:
+              papelera_pos_ = (i - 1, fila.index('P'))
+      return oficina_, papelera_pos_, n, m
 
 # Llama a la función para leer el archivo
 #OFICINA, PAPELERA_POS, alto, ancho = leer_grid(file_name)
@@ -140,8 +169,8 @@ def NewShuffle(arr):
   mutable_arr = [list(item) for item in arr]
   n = len(mutable_arr)
   for i in range(n - 1, 0, -1):
-    j = np.random.randint(0, i)
-    mutable_arr[i], mutable_arr[j] = mutable_arr[j], mutable_arr[i]
+      j = np.random.randint(0, i)
+      mutable_arr[i], mutable_arr[j] = mutable_arr[j], mutable_arr[i]
 
   # Convertir de nuevo a lista de tuplas
   return [tuple(item) for item in mutable_arr]
@@ -166,22 +195,22 @@ def a_star_search(grid, start, goal):
     g_score = {start: 0}
     f_score = {start: heuristic(start, goal)}
     while open_list:
-      _, current = heapq.heappop(open_list)
-      if np.all(current == goal):
-        return reconstruct_path(came_from, current)
-      neighbors = grid.get_neighborhood(current, moore=True, include_center=False)
-      for neighbor in neighbors:
-        if grid.out_of_bounds(neighbor):
-          continue
-        cell_contents = grid.get_cell_list_contents(neighbor)
-        if any(isinstance(obj, Obstaculo) for obj in cell_contents):
-          continue
-        tentative_g_score = g_score[current] + 1
-        if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
-          came_from[neighbor] = current
-          g_score[neighbor] = tentative_g_score
-          f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
-          heapq.heappush(open_list, (f_score[neighbor], neighbor))
+        _, current = heapq.heappop(open_list)
+        if np.all(current == goal):
+            return reconstruct_path(came_from, current)
+        neighbors = grid.get_neighborhood(current, moore=True, include_center=False)
+        for neighbor in neighbors:
+            if grid.out_of_bounds(neighbor):
+                continue
+            cell_contents = grid.get_cell_list_contents(neighbor)
+            if any(isinstance(obj, Obstaculo) for obj in cell_contents):
+                continue
+            tentative_g_score = g_score[current] + 1
+            if neighbor not in g_score or tentative_g_score < g_score[neighbor]:
+                came_from[neighbor] = current
+                g_score[neighbor] = tentative_g_score
+                f_score[neighbor] = tentative_g_score + heuristic(neighbor, goal)
+                heapq.heappush(open_list, (f_score[neighbor], neighbor))
 
     return None  # No se encontró ningún camino
 
@@ -190,94 +219,94 @@ def a_star_search(grid, start, goal):
 #Return: Nada
 #Se encarga de servir como base para crear agentes de tipo aspiradora
 class AgenteRobot(Agent):
-  def __init__(self, id, model):
-    super().__init__(id, model)
-    self.capacity = 5
-    self.carrying = 0
-    self.returning = False
-    self.path_to_papelera = []
-    self.steps_since_last_path_update = 0
-
-  def almacenamiento(self):
-    print(f'El robot {self.unique_id} tiene actualmente {self.carrying} unidades de basura')
-
-  def clean(self):
-    cell_contents = self.model.grid.get_cell_list_contents([self.pos])
-    trash_in_cell = [obj for obj in cell_contents if isinstance(obj, Basura)]
-    trash_count = len(trash_in_cell)
-    if trash_count > 0:
-      if trash_count <= (self.capacity - self.carrying):
-        to_collect = trash_in_cell
-      else:
-        to_collect = trash_in_cell[:self.capacity - self.carrying]
-      for trash in to_collect:
-        self.model.grid.remove_agent(trash)
-        self.carrying += 1
-        if DEBUG:
-            print(f"Robot {self.unique_id} recogió basura en {self.pos}. Almacenamiento: {self.carrying}/{self.capacity}")
-
-  def empty(self):
-    self.carrying = 0
-    self.returning = False
-    if DEBUG:
-        print(f"Robot {self.unique_id} vació su contenido en la papelera.")
-
-  def find_path_to_papelera(self):
-    self.path_to_papelera = a_star_search(self.model.grid, self.pos, self.model.papelera_coords)
-    if self.path_to_papelera:
-      self.path_to_papelera.pop(0)  # Remove the current position
-
-  #def move(self):
-    #if self.returning and self.path_to_papelera:
-     # new_position = self.path_to_papelera.pop(0)
-      #self.model.grid.move_agent(self, new_position)
-      #if np.all(new_position == self.model.papelera_coords):
-       # self.empty()
-    #else:
-     # options=self.model.grid.get_neighborhood(self.pos,moore = True, include_center=False)
-      #valid_moves = []
-      #for pos in options:
-       # cell_contents = self.model.grid.get_cell_list_contents(pos)
-       # if not any(isinstance(obj, (Obstaculo, AgenteRobot)) for obj in cell_contents):
-        #  valid_moves.append(pos)
-
-      #if valid_moves:
-       # new_position = random.choice(valid_moves)
-        #self.model.grid.move_agent(self, new_position)
-
-  def move(self):
-    if self.returning:
-      print(f"Robot {self.unique_id} retoma su camino hacia la papelera.")
-      if not self.path_to_papelera or self.steps_since_last_path_update >= 4:
-        self.find_path_to_papelera()
+    def __init__(self, id, model):
+        super().__init__(id, model)
+        self.capacity = 5
+        self.carrying = 0
+        self.returning = False
+        self.path_to_papelera = []
         self.steps_since_last_path_update = 0
-      if self.path_to_papelera:
-        new_position = self.path_to_papelera.pop(0)
-        self.model.grid.move_agent(self, new_position)
-        self.steps_since_last_path_update += 1
-        if np.all(new_position == self.model.papelera_coords):
-          self.empty()
-    else:
-      print(f"Robot {self.unique_id} Moviendose al azar")
-      options = self.model.grid.get_neighborhood(self.pos, moore=True, include_center=False)
-      valid_moves = []
-      for pos in options:
-        cell_contents = self.model.grid.get_cell_list_contents(pos)
-        if not any(isinstance(obj, (Obstaculo, AgenteRobot)) for obj in cell_contents):
-          valid_moves.append(pos)
-        if valid_moves:
-          new_position = random.choice(valid_moves)
-          self.model.grid.move_agent(self, new_position)
 
-  def step(self):
-    self.almacenamiento()
-    if self.carrying > 0:
-      if not self.returning:
-        self.returning = True
-        self.find_path_to_papelera()
-    if not self.returning:
-      self.clean()  # Collect trash in the current cell
-    self.move()   # Move to a new cell or towards the papelera
+    def almacenamiento(self):
+        print(f'El robot {self.unique_id} tiene actualmente {self.carrying} unidades de basura')
+
+    def clean(self):
+        cell_contents = self.model.grid.get_cell_list_contents([self.pos])
+        trash_in_cell = [obj for obj in cell_contents if isinstance(obj, Basura)]
+        trash_count = len(trash_in_cell)
+        if trash_count > 0:
+            if trash_count <= (self.capacity - self.carrying):
+                to_collect = trash_in_cell
+            else:
+                to_collect = trash_in_cell[:self.capacity - self.carrying]
+            for trash in to_collect:
+                self.model.grid.remove_agent(trash)
+                self.carrying += 1
+                if DEBUG:
+                    print(f"Robot {self.unique_id} recogió basura en {self.pos}. Almacenamiento: {self.carrying}/{self.capacity}")
+
+    def empty(self):
+        self.carrying = 0
+        self.returning = False
+        if DEBUG:
+            print(f"Robot {self.unique_id} vació su contenido en la papelera.")
+
+    def find_path_to_papelera(self):
+        self.path_to_papelera = a_star_search(self.model.grid, self.pos, self.model.papelera_coords)
+        if self.path_to_papelera:
+            self.path_to_papelera.pop(0)  # Remove the current position
+
+    #def move(self):
+      #if self.returning and self.path_to_papelera:
+      # new_position = self.path_to_papelera.pop(0)
+        #self.model.grid.move_agent(self, new_position)
+        #if np.all(new_position == self.model.papelera_coords):
+        # self.empty()
+      #else:
+      # options=self.model.grid.get_neighborhood(self.pos,moore = True, include_center=False)
+        #valid_moves = []
+        #for pos in options:
+        # cell_contents = self.model.grid.get_cell_list_contents(pos)
+        # if not any(isinstance(obj, (Obstaculo, AgenteRobot)) for obj in cell_contents):
+          #  valid_moves.append(pos)
+
+        #if valid_moves:
+        # new_position = random.choice(valid_moves)
+          #self.model.grid.move_agent(self, new_position)
+
+    def move(self):
+        if self.returning:
+            print(f"Robot {self.unique_id} retoma su camino hacia la papelera.")
+            if not self.path_to_papelera or self.steps_since_last_path_update >= 4:
+                self.find_path_to_papelera()
+                self.steps_since_last_path_update = 0
+            if self.path_to_papelera:
+                new_position = self.path_to_papelera.pop(0)
+                self.model.grid.move_agent(self, new_position)
+                self.steps_since_last_path_update += 1
+                if np.all(new_position == self.model.papelera_coords):
+                    self.empty()
+        else:
+            print(f"Robot {self.unique_id} Moviendose al azar")
+            options = self.model.grid.get_neighborhood(self.pos, moore=True, include_center=False)
+            valid_moves = []
+            for pos in options:
+                cell_contents = self.model.grid.get_cell_list_contents(pos)
+                if not any(isinstance(obj, (Obstaculo, AgenteRobot)) for obj in cell_contents):
+                    valid_moves.append(pos)
+                if valid_moves:
+                    new_position = random.choice(valid_moves)
+                    self.model.grid.move_agent(self, new_position)
+
+    def step(self):
+        self.almacenamiento()
+        if self.carrying > 0:
+            if not self.returning:
+                self.returning = True
+                self.find_path_to_papelera()
+        if not self.returning:
+            self.clean()  # Collect trash in the current cell
+        self.move()   # Move to a new cell or towards the papelera
 
 #Nombre: getGrid
 #Parametros: un model.
@@ -306,89 +335,82 @@ def getGrid(model):
 """
 
 class OficinaModel(Model):
-  def __init__(self, width, height, num_agents = 5):
-    super().__init__()
-    self.cells = np.zeros((width, height))
-    self.num_agents = num_agents
-    self.grid = MultiGrid(width, height, False)
-    self.schedule = RandomActivation(self)
-    self.currentStep = 0
-    self.numBasuraTotal = 0
-    self.basuraRestante = 0
-    self.width = width
-    self.height = height
-    self.initial_grid, self.papelera_coords = generate_test_grid(width=width, height=height)
+    def __init__(self, width, height, num_agents = 5):
+        super().__init__()
+        self.cells = np.zeros((width, height))
+        self.num_agents = num_agents
+        self.grid = MultiGrid(width, height, False)
+        self.schedule = RandomActivation(self)
+        self.currentStep = 0
+        self.numBasuraTotal = 0
+        self.basuraRestante = 0
+        self.width = width
+        self.height = height
+        self.initial_grid, self.papelera_coords = generate_test_grid(width=width, height=height)
 
-    self.datacollector = DataCollector(model_reporters = {"Grid" : getGrid })
+        self.datacollector = DataCollector(model_reporters = {"Grid" : getGrid })
 
-    obstaculo_id = 0
-    basura_id = 0
-    for i in range(width):
-      for j in range(height):
-        if self.initial_grid[i][j] == 'X':
-          new_obstaculo = Obstaculo(obstaculo_id, self)
-          self.grid.place_agent(new_obstaculo, (i, j))
-          obstaculo_id += 1
-        elif self.initial_grid[i][j] == 'P':
-          new_papelera = Papelera(1, self)
-          self.papelera_coords = (i, j)
-          self.grid.place_agent(new_papelera, (i, j))
-          if DEBUG:
-            print(f'La papelera fue colocada en: {(i,j)} y su ubicacion correcta es: {self.papelera_coords}')
-        elif self.initial_grid[i][j].isdigit():
-          num = int(self.initial_grid[i][j])  # Cantidad de basura
-          for _ in range(num):
-            new_basura = Basura(basura_id, self, num)
-            self.grid.place_agent(new_basura, (i, j))
-            basura_id += 1
-            self.numBasuraTotal += 1
-          if DEBUG:
-            print(f'Basura colocada en: {(i,j)} con una cantidad de: {num}')
+        obstaculo_id = 0
+        basura_id = 0
+        for i in range(width):
+            for j in range(height):
+                if self.initial_grid[i][j] == 'X':
+                    new_obstaculo = Obstaculo(obstaculo_id, self)
+                    self.grid.place_agent(new_obstaculo, (i, j))
+                    obstaculo_id += 1
+                elif self.initial_grid[i][j] == 'P':
+                    new_papelera = Papelera(1, self)
+                    self.papelera_coords = (i, j)
+                    self.grid.place_agent(new_papelera, (i, j))
+                    if DEBUG:
+                        print(f'La papelera fue colocada en: {(i,j)} y su ubicacion correcta es: {self.papelera_coords}')
+                elif self.initial_grid[i][j].isdigit():
+                    num = int(self.initial_grid[i][j])  # Cantidad de basura
+                    for _ in range(num):
+                        new_basura = Basura(basura_id, self, num)
+                        self.grid.place_agent(new_basura, (i, j))
+                        basura_id += 1
+                        self.numBasuraTotal += 1
+                    if DEBUG:
+                        print(f'Basura colocada en: {(i,j)} con una cantidad de: {num}')
 
-    for i in range(self.num_agents):
-      empty_positions = self.grid.empties
-      if empty_positions:
-        position = self.random.choice(list(empty_positions))
-        agent = AgenteRobot(i, self)
-        self.grid.place_agent(agent, position)
-        self.schedule.add(agent)
+        for i in range(self.num_agents):
+            empty_positions = self.grid.empties
+            if empty_positions:
+                position = self.random.choice(list(empty_positions))
+                agent = AgenteRobot(i, self)
+                self.grid.place_agent(agent, position)
+                self.schedule.add(agent)
 
-  def allAgentsEmpty(self):
-       empty = all(agent.carrying == 0 for agent in self.schedule.agents if isinstance(agent, AgenteRobot))
-       print(f'Agentes vacíos: {empty}')
-       return empty
+    def allAgentsEmpty(self):
+        empty = all(agent.carrying == 0 for agent in self.schedule.agents if isinstance(agent, AgenteRobot))
+        print(f'Agentes vacíos: {empty}')
+        return empty
 
+    def allCellClean(self):
+        self.basuraRestante = sum(isinstance(obj, Basura) for cell in self.grid.coord_iter() for obj in cell[0])
+        print(f'Basura restante es: {self.basuraRestante}')
+        return self.basuraRestante == 0
 
-  #def allCellClean(self):
-    #self.basuraRestante = sum(isinstance(agent, Basura) for agent in self.schedule.agents)
-    #print(f'Basura restaste es: {self.basuraRestante}')
-    #if (self.numBasuraTotal - self.basuraRestante) == 0:
-      #return True
+    def SimulationDone(self):
+        if self.allCellClean() and self.allAgentsEmpty():
+            return True
+        else:
+            return False
 
-  def allCellClean(self):
-    self.basuraRestante = sum(isinstance(obj, Basura) for cell in self.grid.coord_iter() for obj in cell[0])
-    print(f'Basura restante es: {self.basuraRestante}')
-    return self.basuraRestante == 0
+    def SimulationDonecomprobation(self):
+        all_clean = self.allCellClean()
+        all_empty = self.allAgentsEmpty()
+        print(f'SimulationDone -> all_clean: {all_clean}, all_empty: {all_empty}')
+        return all_clean and all_empty
 
-  def SimulationDone(self):
-    if self.allCellClean() and self.allAgentsEmpty():
-      return True
-    else:
-      return False
-
-  def SimulationDonecomprobation(self):
-    all_clean = self.allCellClean()
-    all_empty = self.allAgentsEmpty()
-    print(f'SimulationDone -> all_clean: {all_clean}, all_empty: {all_empty}')
-    return all_clean and all_empty
-
-  def step(self):
-    self.datacollector.collect(self)
-    self.schedule.step()
-    if self.allCellClean() and self.allAgentsEmpty():
+    def step(self):
+        self.datacollector.collect(self)
+        self.schedule.step()
+        if self.allCellClean() and self.allAgentsEmpty():
             print(f'Todas las celdas están limpias y todos los robots han vaciado su basura en {self.currentStep} pasos.')
-    self.currentStep += 1
-    self.SimulationDonecomprobation()
+        self.currentStep += 1
+        self.SimulationDonecomprobation()
 
 """## Corrida de simulación"""
 
@@ -400,8 +422,8 @@ model = OficinaModel(ANCHO, ALTO, AGENT_NUM)
 ITERCOUNT = 1
 #while iter_count < MAX_ITER and not model.SimulationDone():
 while model.SimulationDone()==False:
-  model.step()
-  ITERCOUNT = ITERCOUNT + 1
+    model.step()
+    ITERCOUNT = ITERCOUNT + 1
 
 print(f'La basura total colocada es: {model.numBasuraTotal}')
 print(f'La basura restante es: {model.basuraRestante}')
